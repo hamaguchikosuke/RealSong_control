@@ -671,7 +671,12 @@ if (val)
             %       set(handles.gph.axes_data_plot(3),'XData',t0(1:skip:end),'YData',100*x0(1:skip:end,3));
         end
         set(handles.axes_feature,'XLim',[t0(1),t0(end)]);
-        E1mean=100*median(x0(1:skip:end,handles.pm.rec_E1_index));
+        if isempty( handles.pm.rec_E1_index)
+            E1mean = 0;
+        else
+            E1mean=100*median(x0(1:skip:end,handles.pm.rec_E1_index));
+        end
+      
 %         yplot_range
        yplot_range_tmp= [min(yplot_range(1),E1mean-10),yplot_range(2)];
         set(handles.axes_data,'XLim',[t0(1),t0(end)],'YLim',yplot_range_tmp);
