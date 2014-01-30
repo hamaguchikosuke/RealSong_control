@@ -1,0 +1,129 @@
+function sv=my_trainsvm(X,Y,varargin)
+% train support vector machine with gaussian kernel,
+% based on training vector X (dxN), training tag Y (1xN),
+% it returns support vector struct sv
+% 
+% sv.X % Support Vectors (SVs).
+% sv.Y % Labels of SVs. 
+% sv.lmda % Weights of each SVs.
+% sv.sigma2 % actually, this is equal to 1/sigma2 parameter in Gaussian Kernel.
+% 
+% usage)
+% sv=my_trainsvm(X,Y); % uses default sigma2=1/2 and returns a struct SV.
+% sv=my_trainsvm(X,Y,sigma2); % you can specify sigma2.
+% 
+% example)
+% % generate teacher data
+% n1=50;
+% n2=50;
+% 
+% x1m = [2,2,2]';
+% x1s = 2;
+% 
+% x2m = [-2,-2,-2]';
+% x2s = 2;
+% 
+% dim=length(x1m);
+% 
+% x1 = repmat(x1m,1,n1)+ randn(dim,n1)*x1s;
+% x2 = repmat(x2m,1,n2)+ randn(dim,n2)*x2s;
+% y1 = ones(n1,1);
+% y2 = -ones(n2,1);
+% 
+% X=[x1,x2];
+% Y=[y1;y2];
+% figure;
+% plot3(X(1,1:n1),X(2,1:n1),X(3,1:n1),'r.');hold on;
+% plot3(X(1,n1+1:end),X(2,n1+1:end),X(3,n1+1:end),'b.');
+% 
+% sigma2=1/2;
+% sv=my_trainsvm(X,Y,sigma2);
+% 
+% % generate test samples
+% n1=10;
+% n2=10;
+% 
+% x1 = repmat(x1m,1,n1)+ randn(dim,n1)*x1s;
+% x2 = repmat(x2m,1,n2)+ randn(dim,n2)*x2s;
+% y1 = ones(n1,1);
+% y2 = -ones(n2,1);
+% 
+% X=[x1,x2];
+% Y=[y1;y2];
+% 
+% 
+% 
+% [g_predict,b] = my_predictsvm(sv, X);
+% error_rate=nnz(g_predict.*Y<0)/(n1+n2);
+% fprintf('Error rate: %hg%%.\n', error_rate*100);
+% plot3(X(1,1:n1),X(2,1:n1),X(3,1:n1),'m.');
+% plot3(X(1,n1+1:end),X(2,n1+1:end),X(3,n1+1:end),'c.');
+% 
+% written by Kosuke Hamaguchi, 2011/12/21.
+
+if nargin>=3
+   sigma2 = varargin{1};
+else
+   sigma2  = 1/2;
+end
+nsample=length(X);
+
+min_lmda=0;
+max_lmda=1000;
+lmda_thresh=0.01;
+lmda = zeros(nsample,1);
+
+
+
+D=return_D(sigma2,X,Y); % It actually returns D.
+
+gamma  = 2;
+eta = 0.1;
+max_itr=1000000;
+    
+sv.sigma2= sigma2;
+
+
+
+    
+
+%%
+itr=1;
+d_lmda=1;
+
+while any(d_lmda>1.e-12) && itr<max_itr
+itr=itr+1;
+    % minimize Lagrange function (change lmda)
+    
+    E = D*lmda;
+    d_lmda = min([max([gamma*(1-E),-lmda],[],2),max_lmda-lmda],[],2);
+    lmda = lmda + eta * d_lmda;
+     
+    if mod(itr,10000)==0,
+        fprintf('%d. max(d_lmda)=%g \n',itr,max(d_lmda));
+    end
+end
+
+
+support_vector_index = find(lmda > lmda_thresh);
+sv.lmda = lmda(support_vector_index);
+sv.Xs   = X(:,support_vector_index);
+sv.Ys   = Y(support_vector_index);
+
+fprintf('Converged (Itr=%d). Number of SV is %d, sum lmdaY = %g.\n',...
+    itr,length(support_vector_index), sum(sv.Ys.*sv.lmda));
+
+
+
+
+function D=return_D(sigma2,X,Y)
+% return yi \sigma_j y_j K(Xi,Xj)
+% by KH 2011/11/22
+
+nsample=size(X,2);
+dot_x = sum(X.*X,1);
+XiXj    = X'*X;
+unit_vec = ones(1,nsample);
+for ii=1:nsample
+    D(ii,:)= Y(ii)*exp(sigma2*(2*XiXj(ii,:)-dot_x-dot_x(ii)*unit_vec)).*Y';
+end
