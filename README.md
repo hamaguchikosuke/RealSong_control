@@ -1,7 +1,7 @@
 RealSong_control
 ================
 
-Realtime detection of sound and playback
+MATLAB + xPCtarget based realtime detection of sound and playback 
 
 This software is a collection of MATLAB codes for realtime detection 
 of a target pattern in animal vocalization (like songbird's song) 
