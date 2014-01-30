@@ -138,11 +138,13 @@ switch handles.pm.target
             case {'RealSong(PCI6052E,FullMode)','RealSong(PCI6052E,MIConly)'}
                   handles.pm.modelname='test_PCI6052E_20130416_3ch';
                 
-            case {'RealSong(PCI6070E,FullMode)', 'RealSong(PCI6070E,MIConly)'}
+            case {'RealSong(PCI6070E,FullMode)'}
                 % This is for PCI-MIO-16E (PCI6070E), both MIC and E1.
-                % 12bit AD/DA. 
-                handles.pm.modelname='test_PCI6070E_20130222';
-             otherwise
+                % 12bit AD/DA.
+                handles.pm.modelname='test_PCI6070E_20130416_3ch';
+            case 'RealSong(PCI6070E,MIConly)'
+                handles.pm.modelname='test_PCI6070_20130416_MIConly';
+            otherwise
                 error('Unknown model %s',handles.pm.target);
         end
         close_system(handles.pm.modelname,0);
@@ -150,40 +152,40 @@ switch handles.pm.target
         % For MIC only mode, delete unnecessary blocks for
                 % lighter computational burden.
                 
-        if strfind(handles.pm.target,'MIConly')
-             dynamic_generate_miconly_system=1;
-                if ~isempty(strfind(handles.pm.target,'MIConly')) && (dynamic_generate_miconly_system)
-                    
-                    BlkName=[handles.pm.modelname '/RealSongControl'];
-                    hin=return_line_handles_simulink_model(BlkName);
-                    delete_line(hin{2});
-                    
-                    
-                    % find the destination block for OscilloAnticromic.
-                    Ports=get_param([handles.pm.modelname '/OscilloAntidromic'],'PortConnectivity');
-                    BusHandle=Ports(end).DstBlock;
-                    BusName=get_param(BusHandle,'Name');
-                    
-                    BlkName=[handles.pm.modelname '/OscilloAntidromic'];
-                    [hin,hout]=return_line_handles_simulink_model(BlkName);
-                    for dd=1:length(hin),delete_line(hin{dd});end
-                    for dd=1:length(hout),delete_line(hout{dd});end
-                    
-                    % replace_block('test_PCI6052E_20121026','OscilloAntidromic','Gain')
-                    
-                    % delete_line('test_PCI6052E_20121026', 'RealSongControl/1', 'PCI-6052E_AD/1');
-                    set_param([ handles.pm.modelname,'/PCI-6052E_AD'],...
-                        'channel','[1]','range','[-10 ]','Coupling','[0 ]');
-                    add_line( handles.pm.modelname,'Dummy/1','RealSongControl/2');
-                    add_line( handles.pm.modelname,'Dummy/1',[BusName,'/1']);
-                    add_line( handles.pm.modelname,'Dummy/1',[BusName,'/2']);
-                    delete_block([ handles.pm.modelname,'/OscilloAntidromic']);
-                    try
-                        save_system(handles.pm.modelname,[handles.pm.modelname,'_miconly']);
-                    end
-                    handles.pm.modelname=[handles.pm.modelname,'_miconly'];
-                end
-        end
+%         if strfind(handles.pm.target,'MIConly')
+%              dynamic_generate_miconly_system=1;
+%                 if ~isempty(strfind(handles.pm.target,'MIConly')) && (dynamic_generate_miconly_system)
+%                     
+%                     BlkName=[handles.pm.modelname '/RealSongControl'];
+%                     hin=return_line_handles_simulink_model(BlkName);
+%                     delete_line(hin{2});
+%                     
+%                     
+%                     % find the destination block for OscilloAnticromic.
+%                     Ports=get_param([handles.pm.modelname '/OscilloAntidromic'],'PortConnectivity');
+%                     BusHandle=Ports(end).DstBlock;
+%                     BusName=get_param(BusHandle,'Name');
+%                     
+%                     BlkName=[handles.pm.modelname '/OscilloAntidromic'];
+%                     [hin,hout]=return_line_handles_simulink_model(BlkName);
+%                     for dd=1:length(hin),delete_line(hin{dd});end
+%                     for dd=1:length(hout),delete_line(hout{dd});end
+%                     
+%                     % replace_block('test_PCI6052E_20121026','OscilloAntidromic','Gain')
+%                     
+%                     % delete_line('test_PCI6052E_20121026', 'RealSongControl/1', 'PCI-6052E_AD/1');
+%                     set_param([ handles.pm.modelname,'/PCI-6052E_AD'],...
+%                         'channel','[1]','range','[-10 ]','Coupling','[0 ]');
+%                     add_line( handles.pm.modelname,'Dummy/1','RealSongControl/2');
+%                     add_line( handles.pm.modelname,'Dummy/1',[BusName,'/1']);
+%                     add_line( handles.pm.modelname,'Dummy/1',[BusName,'/2']);
+%                     delete_block([ handles.pm.modelname,'/OscilloAntidromic']);
+%                     try
+%                         save_system(handles.pm.modelname,[handles.pm.modelname,'_miconly']);
+%                     end
+%                     handles.pm.modelname=[handles.pm.modelname,'_miconly'];
+%                 end
+%         end
         %Check Connection Between Host and Target PC
         % Use 'xpctargetping' to test for a proper host-target connection.
         if ~strcmp(xpctargetping, 'success')
