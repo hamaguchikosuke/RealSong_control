@@ -20,5 +20,3 @@ All the code is written in MATLAB using xPCtarget toolbox, by Kosuke Hamaguchi.
 Acknowledgement:
 
 Sound feature calculation is based on Segal Saar's matlab code.
-
-Detection of target sound chunk is done by Support Vector Machine (libsvm).
