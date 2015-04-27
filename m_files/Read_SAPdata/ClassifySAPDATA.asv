@@ -1,0 +1,337 @@
+function ClassifySAPDATA(opt)
+% read SAP exported MATLAB format data of syllable database,
+% check the syllable by eyes and ears, 
+% by KH 20090729
+% 
+%% 
+global sap
+% addpath('Sub_SyllableAnalysis_Mcodes');
+% 
+% sap.pm.names={'recnum',...              % 1
+%     'serial_number',...             % 2
+%     'bird_ID',...                   % 3
+%     'start_on',...                  % 4
+%     'duration',...                  % 5
+%     'mean_pitch',...                % 6
+%     'mean_FM',...                   % 7
+%     'mean_entropy',...              % 8
+%     'mean_goodness_of_pitch',...    % 9
+%     'mean_mean_frequency',...       % 10
+%     'mean_am2',...                  % 11
+%     'mean_amplitude',...            % 12
+%     'var_pitch',...                 % 13
+%     'var_FM',...                    % 14
+%     'var_entropy',...               % 15
+%     'var_goodness_of_pitch',...     % 16
+%     'var_mean_frequency',...        % 17
+%     'var_am',...                    % 18
+%     'month',...                     % 19
+%     'day',...                       % 20
+%     'hour',...                      % 21
+%     'minute',...                    % 22
+%     'second',...                    % 23
+%     'cluster'};                     % 24
+%     'file_name'};                   % 25
+%       'MahlDist'                    % 26
+%     'EM_cluster',                   % 27
+%     'manual_cluster',...            % 28
+
+sap.pm.feature_names={...
+    'amplitude',...
+     'meanfreq',...
+     'pitch',...
+     'entropy',...
+     'pgood'}
+ 
+try
+    sql_dir='C:\mysql\data\mysql\';
+    d=dir(fullfile(sql_dir,'*.myd'));
+    tablenames = {d.name};
+    tablenames=strrep(tablenames,'.MYD','');
+    tablenames=strrep(tablenames,'.myd','');
+    
+    [s,v] = listdlg('PromptString','Select a table to read:',...
+        'SelectionMode','single',...
+        'ListString',tablenames);
+    if (v)
+        pathname=sql_dir;
+        sap.SAPtablename=tablenames{s};
+    else
+        disp('No table selected!');
+        return;
+    end
+    logintimeout(5);
+    fprintf('Loading table from %s\n',sap.SAPtablename);
+    conn = database('mysql', '', '');
+    setdbprefs('DataReturnFormat','numeric')
+    conn_txt=sprintf('select * from %s where cluster<9 and duration>20',sap.SAPtablename);
+    curs = exec(conn, conn_txt);
+    curs = fetch(curs,6000);
+    sap.data=curs.data';
+    colname=columnnames(curs); colname=strrep(colname,'''','');colname=strsplit(colname,',');
+    sap.pm.names=colname;
+    
+    setdbprefs('DataReturnFormat','cellarray')
+    conn_txt=sprintf('select distinct file_name from %s where cluster<9 and duration>20',sap.SAPtablename);
+    curs = exec(conn, conn_txt);
+    curs = fetch(curs,6000);
+    sap.distinct_data_filename=curs.data';
+    
+    conn_txt=sprintf('select file_name from %s where cluster<9 and duration>20',sap.SAPtablename);
+    curs = exec(conn, conn_txt);
+    curs = fetch(curs,6000);
+    sap.data_filename=curs.data';
+     
+    close(curs);
+    close(conn);
+    
+    sap.pm.feature_dir = uigetdir('C:\home\', 'Pick a Feature binary data directory');
+    s=strsplit(sap.pm.feature_dir,filesep);
+    sap.pm.parent_dir= fullfile(s{1:end-1});   % The sound directory and feature directory must be in the same directory.
+    s=strsplit(sap.pm.feature_dir,filesep);
+    sap.pm.sound_dir=fullfile(sap.pm.parent_dir,strrep(s{end},'_feature',''))
+    
+%     [sap.SAPtablename,pathname]=uigetfile( ...
+%         {'*.*',  'All Files (*.*)'}, ...
+%         'Pick a SAP exported data file');
+%     
+%     cd(pathname);
+%     data= load(fullfile(pathname,sap.SAPtablename));
+%     sap.data = data.LocalDouble;
+catch e
+    rethrow(e);
+end
+%%
+% time_stamp = datenum([repmat(2009,size(data,2),1) sap.data(19,:)' sap.data(20,:)' sap.data(21,:)' sap.data(22,:)' sap.data(23,:)']);
+
+sap.pm.xname = 'duration';
+sap.pm.yname = 'mean_entropy';
+% zname = 'mean_pitch';
+figure(1);clf;
+sap.gph.ax(1)=axes('Position',[.25 .6 .5 .3]);
+sap.pm.xind = strmatch(sap.pm.xname,sap.pm.names);
+sap.pm.yind = strmatch(sap.pm.yname,sap.pm.names);
+
+sap.pm.cluster_index        =strmatch('cluster',sap.pm.names);
+sap.pm.serial_index         =strmatch('serial_number',sap.pm.names);
+sap.pm.start_on_index       =strmatch('start_on',sap.pm.names);
+sap.pm.duration_index       =strmatch('duration',sap.pm.names);
+sap.pm.mean_pitch_index     =strmatch('mean_pitch',sap.pm.names);         % 6
+sap.pm.mean_FM_index        =strmatch('mean_FM',sap.pm.names);         % 6
+sap.pm.mean_entropy_index   =strmatch('mean_entropy',sap.pm.names);         % 6
+sap.pm.mean_gpitch_index    =strmatch('mean_goodness_of_pitch',sap.pm.names);         % 6
+sap.pm.var_entropy_index    =strmatch('var_entropy',sap.pm.names);         % 6
+
+sap.pm.Mahl_cluster_index   = size(sap.data,1)+1;
+sap.pm.EM_cluster_index     = size(sap.data,1)+2;
+sap.pm.Manual_cluster_index = size(sap.data,1)+3;
+
+sap.data=[sap.data;zeros(3,size(sap.data,2))];
+
+sap.pm.mean_feature_index=[sap.pm.duration_index,...
+            sap.pm.mean_pitch_index,...
+            sap.pm.mean_FM_index,...
+            sap.pm.mean_entropy_index,...
+            sap.pm.mean_gpitch_index];
+        
+sap.pm.classify_dim_index=[sap.pm.mean_feature_index,sap.pm.var_entropy_index];
+        
+sap.pm.feature_loadname=[];
+
+cluster_ID = unique(sap.data(sap.pm.cluster_index,:));
+% get(gcf,'DefaultAxesColorOrder');
+% sap.pm.CS     = {'r.','b.','g.','y.','c.','m.'};
+sap.pm.CS    = [...
+     0.5        0.5       0.5;...    % cluster0: unidentified sounds
+         0         0    1.000;...       % introductory notes
+         0     1.000        0;...       % 1st note
+    1.0000         0        0;...       % 2nd note
+         0     1.000    1.000;...
+    1.0000         0    1.000;...
+    1.0000     1.000       	0;...
+    0.7500    0.7500   0.2500;...
+    0.7500    0.2500   0.7500;...,...
+    0         0         0];             % identified noise  
+
+
+% cluster selection button
+sap.gph.ui_cluster_type_select =uibuttongroup('Visible','off','Position',[.01 .9 .2 .1]);
+dx = 1; dy=1/4.1;
+
+sap.pm.cluster_types={'SAP','Mahl','EM','Manual'};
+sap.pm.cluster_index_in_data=[sap.pm.cluster_index,sap.pm.Mahl_cluster_index,sap.pm.EM_cluster_index,sap.pm.Manual_cluster_index];
+
+for ii=[1:4]
+% evaltxt = sprintf('sap.gph.ui_cluster_type(%d) = uicontrol(''Style'',''Radio'',''Value'',0,''String'',sap.pm.cluster_types{%d},''unit'',''normalized'',''pos'',[%g,%g,%g,dy],''parent'',sap.gph.ui_cluster_type_select,''HandleVisibility'',''off'',''CallBack'',''ClassifySAP_sub_routines(''''%s'''')'');',...
+%     ii,ii,0,1-(ii)*dy,.8,'select_cluster_data_type');
+% eval(evaltxt);
+
+evaltxt = sprintf('sap.gph.ui_cluster_type(%d) = uicontrol(''Style'',''Radio'',''Value'',0,''String'',sap.pm.cluster_types{%d},''unit'',''normalized'',''pos'',[%g,%g,%g,dy],''parent'',sap.gph.ui_cluster_type_select,''HandleVisibility'',''off'',''UserData'',sap.pm.cluster_index_in_data(ii));',...
+    ii,ii,0,1-(ii)*dy,.8)
+eval(evaltxt);
+end
+
+set(sap.gph.ui_cluster_type_select,'SelectionChangeFcn','ClassifySAP_sub_routines(''select_cluster_data_type'')');
+set(sap.gph.ui_cluster_type_select,'SelectedObject',sap.gph.ui_cluster_type(1));  % No selection 
+% set(sap.gph.ui_cluster_type(1),'Value',1);
+set(sap.gph.ui_cluster_type_select,'Visible','on');
+
+
+
+% cluster selection button
+sap.gph.ui_clusterselect = uipanel('Title','clusters','Position',[.01 .6 .2 .3]);
+dx = 1; dy=1/10;
+for ii=[0:8]
+evaltxt = sprintf('sap.gph.ui_cluster%d = uicontrol(''Style'',''Radio'',''Value'',1,''String'',[''cluster'' num2str(%d) '':(%d)''],''unit'',''normalized'',''pos'',[%g,%g,%g,dy],''parent'',sap.gph.ui_clusterselect,''HandleVisibility'',''off'',''CallBack'',''ClassifySAP_sub_routines(''''%s'''')'');',...
+    mod(ii,9),mod(ii,9),length(find(sap.data(sap.pm.cluster_index,:)==mod(ii,9))),0,1-(ii+1)*dy,.6,'update_datatmp');
+eval(evaltxt);
+end
+ii=9; % for noise.
+evaltxt = sprintf('sap.gph.ui_cluster%d = uicontrol(''Style'',''Radio'',''Value'',1,''String'',[''noise'' num2str(%d) '':(%d)''],''unit'',''normalized'',''pos'',[%g,%g,%g,dy],''parent'',sap.gph.ui_clusterselect,''HandleVisibility'',''off'',''CallBack'',''ClassifySAP_sub_routines(''''%s'''')'');',...
+    ii,ii,length(find(sap.data(sap.pm.cluster_index,:)==ii)),0,1-(ii+1)*dy,.8,'update_datatmp');
+eval(evaltxt);
+
+sap.gph.ax(3)=axes('parent',sap.gph.ui_clusterselect,'unit','normalized','Position',[.6 dy/2 .25 1-dy]);
+load(fullfile(sap.pm.sound_dir,'converting_matrix'));
+sap.pm.converting_matrix=converting_matrix;
+for ii=1:10
+           plot(0,-ii,'ko','MarkerFaceColor',sap.pm.CS(ii,:));hold on;
+           if (ii>1)&&(ii<=length(sap.pm.converting_matrix))
+           text(1,-ii,['=',sap.pm.converting_matrix{ii-1}],'Color',sap.pm.CS(ii-1,:));hold on;
+           end
+end
+axis off; axis tight;
+ClassifySAP_sub_routines('update_datatmp');
+
+
+% 
+% for ii=1:length(cluster_ID)
+%     sap.pm.plotind = find(sap.data(sap.pm.cluster_index,:)==cluster_ID(ii));
+%     if (cluster_ID(ii)==0)
+%         CSnow=sap.pm.CS(9,:);
+%     else
+%         CSnow = sap.pm.CS(ii,:);
+%     end
+%     h=plot(sap.data(sap.pm.xind,sap.pm.plotind),sap.data(sap.pm.yind,sap.pm.plotind),'ko','MarkerSize',2);hold on;
+%     set(h,'MarkerFaceColor',CSnow,'MarkerEdgeColor','none');
+% end
+% 
+% xlabel(strrep(sap.pm.xname,'_','\_'));ylabel(strrep(sap.pm.yname,'_','\_'));
+% ClassifySAP_sub_routines('update_datatmp');
+
+ 
+uicontrol('Style', 'pushbutton','String', 'show syllable',...
+    'Unit','Normalized','Position', [.25 .9 .08 .04],'Callback', 'ClassifySAP_sub_routines(''show_syllable'');');
+
+uicontrol('Style', 'pushbutton','String', 'redraw',...
+    'Unit','Normalized','Position', [.35 .9 .08 .04],'Callback', 'ClassifySAP_sub_routines(''redraw'');');
+
+uicontrol('Style', 'pushbutton','String', 'play song',...
+    'Unit','Normalized','Position', [.1 .4 .08 .04],'Callback', 'ClassifySAP_sub_routines(''play_wholesong'');');
+
+uicontrol('Style', 'pushbutton','String', 'play syllable',...
+    'Unit','Normalized','Position', [.2 .4 .08 .04],'Callback', 'ClassifySAP_sub_routines(''play_syllable'');');
+
+uicontrol('Style', 'pushbutton','String', 'show classification',...
+    'Unit','Normalized','Position', [.3 .4 .08 .04],'Callback', 'ClassifySAP_sub_routines(''show_classification'');');
+
+uicontrol('Style', 'pushbutton','String', 'load feature',...
+    'Unit','Normalized','Position', [.4 .4 .08 .04],...
+    'Callback', 'ClassifySAP_sub_routines(''load_feature'');');
+
+uicontrol('Style', 'pushbutton','String', 'AutoClassify',...
+    'Unit','Normalized','Position', [.5 .4 .08 .04], ...
+    'ToolTips','Mahalnovis distance based classification',...
+    'Callback','ClassifySAP_sub_routines(''auto_classify'');');
+
+uicontrol('Style', 'pushbutton','String', 'AutoClassifyAll',...
+   'FontSize',8,...
+   'ForegroundColor','m',...
+    'Unit','Normalized','Position', [.6 .4 .08 .04], ...
+    'ToolTips','Apply Mahalnovis distance based classification to all the unclassified sound',...
+    'Callback','ClassifySAP_sub_routines(''auto_classify_all'');');
+
+
+uicontrol('Style', 'pushbutton','String', {'ExportSyllableTransitions'},...
+    'FontSize',8,...
+    'Unit','Normalized','Position', [.7 .4 .08 .04], ...
+    'ToolTips','Export the identified syllables into text format.',...
+    'Callback','ClassifySAP_sub_routines(''export_syllable_transitions'');');
+
+
+uicontrol('Style', 'pushbutton','String', 'ShowTransMat',...
+    'Unit','Normalized','Position', [.8 .4 .08 .04], ...
+    'ToolTips','Show transition matrix',...
+    'Callback','ClassifySAP_sub_routines(''show_trans_matrix'');');
+
+
+
+uicontrol('Style', 'pushbutton','String', {'ShowSyllable','Transition'},...
+    'Unit','Normalized','Position', [.9 .4 .08 .04], ...
+    'ToolTips','Show Syllable Tree',...
+    'Callback','ClassifySAP_sub_routines(''show_syllable_tree'');');
+
+
+ClassifySAP_sub_routines('init_feature_vector');
+% ClassifySAP_sub_routines('init_feature_vector');
+
+% x axis selection
+sap.gph.ui_xbuttonG = uibuttongroup('visible','off','Position',[.25 .5 .7 .05]);
+dx = 1/7; dy=.5;
+for ii=1:13
+evaltxt = sprintf('sap.gph.ui_xbutton%d = uicontrol(''Style'',''Radio'',''String'',sap.pm.names{%d},''unit'',''normalized'',''pos'',[%g,%g,%g,.5],''parent'',sap.gph.ui_xbuttonG,''HandleVisibility'',''off'');',...
+    ii,ii+4,(mod(ii-1,7))*dx,1-ceil(ii/7)*dy,dx);
+eval(evaltxt);
+end
+% Initialize some button group properties. 
+set(sap.gph.ui_xbuttonG,'SelectionChangeFcn','ClassifySAP_sub_routines(''chk_xaxis_button'')');
+set(sap.gph.ui_xbuttonG,'SelectedObject',sap.gph.ui_xbutton1);  % No selection
+set(sap.gph.ui_xbuttonG,'Visible','on');
+
+% y axis selection
+sap.gph.ui_ybuttonG = uibuttongroup('visible','off','Position',[0.76 .6 .19 .3]);
+dx = 1/2; dy=1/7;
+for ii=1:13
+evaltxt = sprintf('sap.gph.ui_ybutton%d = uicontrol(''Style'',''Radio'',''String'',sap.pm.names{%d},''unit'',''normalized'',''pos'',[%g,%g,%g,dy],''parent'',sap.gph.ui_ybuttonG,''HandleVisibility'',''off'');',...
+    ii,ii+4,floor(ii/7)*dx,1-(mod(ii-1,7)+1)*dy,dx);
+eval(evaltxt);
+end
+% Initialize some button group properties. 
+set(sap.gph.ui_ybuttonG,'SelectionChangeFcn','ClassifySAP_sub_routines(''chk_yaxis_button'')');
+set(sap.gph.ui_ybuttonG,'SelectedObject',sap.gph.ui_ybutton4);  % No selection
+set(sap.gph.ui_ybuttonG,'Visible','on');
+
+sap.gph.ui_select_song_by_filename=uicontrol(...
+    'Style', 'list',...
+    'String', sap.distinct_data_filename,...
+    'Unit','Normalized',...
+    'Position', [.01 .1 .24 .3],...
+    'Callback', 'ClassifySAP_sub_routines(''select_song_by_filename'');');
+
+sap.gph.sonogramAxes=axes('Position',[.25 .1 .6 .3],'YDir','Normal');
+sap.gph.sonogramImg = imagesc(NaN,NaN,NaN); hold on;
+sap.gph.sonogram_feature_plots=plot(repmat(NaN,2,length(sap.pm.feature_names)),repmat(NaN,2,length(sap.pm.feature_names)));
+
+% y axis selection
+sap.gph.ui_featurepanel = uipanel('visible','off','Position',[0.85 .1 .14 .3]);
+dx = .9; dy=1/7;
+for ii=1:length(sap.pm.feature_names)
+evaltxt = sprintf('sap.gph.ui_featurebutton%d = uicontrol(''Style'',''Radio'',''String'',sap.pm.feature_names{%d},''unit'',''normalized'',''pos'',[%g,%g,%g,dy],''parent'',sap.gph.ui_featurepanel,''HandleVisibility'',''off'');',...
+    ii,ii,floor(ii/7)*dx,1-(mod(ii-1,7)+1)*dy,dx);
+eval(evaltxt);
+button_uiname=sprintf('sap.gph.ui_featurebutton%d',ii);
+evaltxt=sprintf('set(%s,''Callback'',''ClassifySAP_sub_routines(''''chk_feature_button'''')'')',button_uiname);
+eval(evaltxt);
+end
+set(sap.gph.ui_featurepanel,'Visible','on');
+
+
+sap.gph.ui_register_shown_cluster_as_noise=uicontrol('Style','pushbutton','String', 'Register as Noise',...
+    'FontSize',8,...
+    'Unit','Normalized','Position', [.85 .06 .1 .05],'Callback', 'ClassifySAP_sub_routines(''register_shown_cluster_as_noise'');');
+
+
+sap.gph.ui_register_shown_cluster_to_Manual_cluster=uicontrol('Style','pushbutton','String', 'Register',...
+    'Unit','Normalized','Position', [.85 0 .1 .05],'Callback', 'ClassifySAP_sub_routines(''register_shown_cluster_to_Manual_cluster'');');
+
+

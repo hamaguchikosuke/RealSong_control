@@ -1,0 +1,108 @@
+function sub_routines(opt)
+global data datatmp gph pm
+
+switch lower(opt)
+    case 'update_datatmp'
+       
+        for ii=[1:9]
+            evaltxt = sprintf('cluster_val(ii)=get(gph.ui_cluster%d,''Value'');',mod(ii,9));
+            eval(evaltxt);
+        end
+        cluster_val;
+        index=zeros(1,size(data,2));
+        for ii=1:9
+            if (cluster_val(ii))
+                 index = index+(data(end,:)==mod(ii,9));
+            end
+        end
+        datatmp = data(:,find(index>0));
+        
+    case 'show_syllable'
+        axes(gph.ax(1));
+        [xposi,yposi]=ginput(1)
+        distance=(data(pm.xind,:)-xposi).^2/var(data(pm.xind,:))+(data(pm.yind,:)-yposi).^2/var(data(pm.yind,:));
+            
+        [mindistnace,pm.minind]=min(distance);
+        filename=return_filename(data(:,pm.minind));
+        
+        axes(gph.ax(2)); cla(gph.ax(2),'reset');    
+        fprintf('reading %s\n',filename);
+        [pm.song,pm.Fsong]=wavread([filename,'.wav']);
+        
+        nfft = 1012;
+        fftwindow=nfft;
+        numoverlap=ceil(nfft/1.2);
+        [y,f,t,p]=spectrogram(pm.song,fftwindow,numoverlap,nfft,pm.Fsong);
+        
+        
+        logp=10*log10(abs(p));
+        imagesc(t,f,logp); set(gca,'YDir','Normal'); colormap(jet);hold on;
+        axis tight;
+        gph.syllable_start=line([data(4,pm.minind),data(4,pm.minind)]/1000,ylim,'Color','r','LineWidth',2);
+        gph.syllable_end  =line(([data(4,pm.minind),data(4,pm.minind)]+data(5,pm.minind))/1000,ylim,'Color','r','LineWidth',2);
+        
+        ind = ceil(pm.Fsong*data(4,pm.minind)/1000)+[0:ceil(pm.Fsong*data(5,pm.minind)/1000)];
+        sound(pm.song(ind),pm.Fsong);
+    case 'play_wholesong'
+        Cs=get(gph.syllable_start,'Color');
+        Ce=get(gph.syllable_end,'Color');
+        
+        sound(pm.song,pm.Fsong);
+        
+        pause(data(4,pm.minind)/1000);
+        set(gph.syllable_start,'Color','k');
+        set(gph.syllable_end,'Color','k');
+        pause(data(5,pm.minind)/1000);
+        set(gph.syllable_start,'Color',Cs);
+        set(gph.syllable_end,'Color',Ce);
+        
+    case 'play_syllable'
+        ind = ceil(pm.Fsong*data(4,pm.minind)/1000)+[0:ceil(pm.Fsong*data(5,pm.minind)/1000)];
+        sound(pm.song(ind),pm.Fsong);
+        
+    case 'show_classification'
+        axes(gph.ax(2));
+        pm.serial=data(2,pm.minind);
+        pm.same_serial = find(data(2,:)==pm.serial);
+        for ii=1:length(pm.same_serial)
+          x = [data(4,pm.same_serial(ii)),data(4,pm.same_serial(ii))+data(5,pm.same_serial(ii))]/1000;
+          line(x,[0 0],'Color','c','LineWidth',2);
+          cluster=data(end,pm.same_serial(ii));
+          if (cluster>0)
+              c = pm.CS{cluster};
+          else
+              c='k.';
+          end
+          text(mean(x),-0.1*diff(ylim),num2str(cluster),'Color',c(1));
+          text(mean(x),-0.12*diff(ylim),c(2));
+        end
+    case 'chk_xaxis_button'  
+        pm.xname=get(get(gph.ui_xbuttonG,'selectedobject'),'String');
+        feval(mfilename,'redraw_clusters');
+    case 'chk_yaxis_button'  
+        pm.yname=get(get(gph.ui_ybuttonG,'selectedobject'),'String');
+        feval(mfilename,'redraw_clusters');
+    case 'redraw_clusters'
+        
+        pm.xind = strmatch(pm.xname,pm.names);
+        pm.yind = strmatch(pm.yname,pm.names);
+        cla(gph.ax(1),'reset');        axes(gph.ax(1));
+%         gph.ax(1)=axes('Position',[.1 .6 .7 .3]);
+        cluster_ID = unique(datatmp(end,:));
+  
+        
+        for ii=1:length(cluster_ID)
+            pm.plotind = find(data(end,:)==cluster_ID(ii));
+            if (cluster_ID(ii)==0)
+                CSnow='k.';
+            else
+                CSnow = pm.CS(cluster_ID(ii),:);
+            end
+            h=plot(datatmp(pm.xind,pm.plotind),datatmp(pm.yind,pm.plotind),CSnow);hold on;
+             h=plot(data(pm.xind,pm.plotind),data(pm.yind,pm.plotind),'k.');hold on;
+    set(h,'MarkerEdgeColor',CSnow);
+        end
+        xlabel(strrep(pm.xname,'_','\_'));ylabel(strrep(pm.yname,'_','\_'));
+    otherwise
+        error('Unknown option')
+end
